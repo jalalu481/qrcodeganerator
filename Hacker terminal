@@ -1,0 +1,329 @@
+<!--
+README: Hacker-Terminal-Web-Project
+
+Purpose:
+A single-file HTML/CSS/JS web project that mimics a "hacker" terminal look for Termux/Kali-themed profiles, demos, or landing pages. It's safe, client-side only, and intended for visual effect (not for any hacking tools).
+
+Files:
+- index.html (this single file contains everything: HTML + CSS + JS)
+
+How to use:
+1. Save this file as `index.html`.
+2. Open locally in a browser to preview or deploy to GitHub Pages.
+
+Quick GitHub upload (commands):
+mkdir Hacker-Terminal-Web-Project
+cd Hacker-Terminal-Web-Project
+# save index.html into this directory
+git init
+git add index.html
+git commit -m "Initial commit: hacker terminal single-file site"
+# Create a repo on GitHub and follow their instructions to add remote, or run:
+# git remote add origin git@github.com:USERNAME/Hacker-Terminal-Web-Project.git
+# git push -u origin main
+
+To enable GitHub Pages (serve on web):
+1. Push to a repo's main branch.
+2. In repo settings -> Pages, select branch `main` and root `/` (or use a gh-pages branch).
+
+Customization (edit inside <script> config):
+- welcomeText: text that types on load
+- showMatrix: toggle background matrix animation
+- theme colors, font-size, prompt text
+
+License: MIT (feel free to adapt)
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hacker Terminal — Demo</title>
+  <style>
+    :root{
+      --bg:#060607;
+      --panel:#000000;
+      --accent:#00ff9c;
+      --muted:#3a3a3a;
+      --glass: rgba(255,255,255,0.03);
+      --mono: 'Fira Mono', 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);font-family:var(--mono);color:var(--accent);}
+    /* Fullscreen container */
+    .wrap{height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+    .terminal{
+      width:100%;max-width:1100px;height:80vh;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));border-radius:12px;padding:18px;box-sizing:border-box;box-shadow:0 20px 50px rgba(0,0,0,0.6);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.02)
+    }
+    /* top bar */
+    .term-top{height:36px;display:flex;align-items:center;gap:10px;padding:6px 10px}
+    .dots{display:flex;gap:8px}
+    .dot{width:12px;height:12px;border-radius:50%;background:var(--muted);box-shadow:inset 0 -2px 0 rgba(0,0,0,0.6)}
+    .dot.close{background:#ff5b57}
+    .dot.min{background:#ffbd2e}
+    .dot.max{background:#27c93f}
+    .title{margin-left:auto;color:rgba(255,255,255,0.25);font-size:12px}
+
+    /* content */
+    .content{display:flex;height:calc(100% - 56px);gap:12px}
+    .left{flex:1;display:flex;flex-direction:column;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(0,0,0,0.03), rgba(255,255,255,0.01));overflow:hidden}
+    .right{width:320px;display:flex;flex-direction:column;padding:12px;border-radius:8px;background:var(--glass);backdrop-filter: blur(4px);color:rgba(255,255,255,0.6);font-size:13px}
+
+    /* screen */
+    .screen{flex:1;overflow:auto;padding:12px;border-radius:6px;border:1px solid rgba(0,255,150,0.02);background:transparent}
+    .line{white-space:pre-wrap;line-height:1.45}
+    .prompt{color:var(--accent);}
+    .muted{color:rgba(255,255,255,0.18)}
+
+    /* typing caret */
+    .caret{display:inline-block;width:8px;height:18px;background:var(--accent);margin-left:6px;vertical-align:middle;animation:blink 1s steps(2) infinite}
+    @keyframes blink{50%{opacity:0}}
+
+    /* matrix background */
+    #matrix{position:absolute;inset:0;z-index:0;pointer-events:none}
+
+    /* fake widgets */
+    .widget{margin-bottom:12px;padding:10px;border-radius:8px;background:linear-gradient(180deg, rgba(0,0,0,0.04), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.02)}
+    .widget h4{margin:0 0 8px 0;font-weight:600;color:var(--accent)}
+    .small{font-size:12px;color:rgba(255,255,255,0.45)}
+
+    /* responsive */
+    @media (max-width:900px){
+      .content{flex-direction:column}
+      .right{width:100%}
+      .terminal{height:92vh}
+    }
+
+    /* cool neon effect for header text */
+    .big-title{font-size:20px;color:var(--accent);text-shadow:0 0 18px rgba(0,255,150,0.08);letter-spacing:1px}
+
+    /* footer */
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:rgba(255,255,255,0.6);cursor:pointer}
+    .btn[aria-pressed="true"]{box-shadow:0 6px 20px rgba(0,255,150,0.04);color:var(--accent)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="terminal" role="region" aria-label="Hacker terminal demo">
+      <canvas id="matrix"></canvas>
+      <div class="term-top">
+        <div class="dots">
+          <div class="dot close"></div>
+          <div class="dot min"></div>
+          <div class="dot max"></div>
+        </div>
+        <div class="title">user@darknet — demo</div>
+      </div>
+
+      <div class="content">
+        <div class="left">
+          <div class="screen" id="screen" tabindex="0"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <button class="btn" id="toggleMatrix">Toggle Matrix</button>
+            <button class="btn" id="runDemo">Run Demo</button>
+            <div style="flex:1"></div>
+            <div class="small muted">Press <kbd>Enter</kbd> to run commands</div>
+          </div>
+        </div>
+
+        <aside class="right">
+          <div class="widget">
+            <h4 class="big-title">System</h4>
+            <div class="small">OS: Kali-like • Kernel: 5.x • Uptime: 3d 12:34</div>
+            <div style="height:8px"></div>
+            <div class="small">IP: 10.0.0.1 • Host: darkbox</div>
+          </div>
+
+          <div class="widget">
+            <h4>Quick Commands</h4>
+            <div class="small">help — show commands</div>
+            <div class="small">scan — fake network scan</div>
+            <div class="small">trace — fake traceroute</div>
+            <div class="small">clear — clear screen</div>
+          </div>
+
+          <div class="widget small">Theme config in JS — edit welcomeText, showMatrix, accent color.</div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    ///////////////////////////////////////////////////////////////////////////
+    // Config
+    const config = {
+      welcomeText: 'Welcome back, operator. Initializing shell...',
+      showMatrix: true,
+      accent: '#00ff9c',
+      prompt: 'root@darknet:~$ '
+    };
+    ///////////////////////////////////////////////////////////////////////////
+
+    // Matrix background
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+    let matrixCols = [];
+    function resizeCanvas(){
+      canvas.width = canvas.clientWidth || window.innerWidth;
+      canvas.height = canvas.clientHeight || window.innerHeight;
+      initMatrix();
+    }
+    function initMatrix(){
+      const cols = Math.floor(canvas.width / 14);
+      matrixCols = new Array(cols).fill(0).map(() => Math.random() * canvas.height);
+    }
+    function matrixTick(){
+      if(!config.showMatrix) return;
+      ctx.fillStyle = 'rgba(0,0,0,0)';
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.font = '12px '+getComputedStyle(document.documentElement).getPropertyValue('--mono');
+      for(let i=0;i<matrixCols.length;i++){
+        const x = i * 14;
+        const y = matrixCols[i];
+        const char = String.fromCharCode(33 + Math.random()*94);
+        ctx.fillStyle = 'rgba(0,255,150,' + (Math.random()*0.6+0.2) + ')';
+        ctx.fillText(char, x, y);
+        matrixCols[i] = y > canvas.height + 20 ? 0 : y + 14*Math.random();
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    setInterval(matrixTick, 45);
+
+    // Terminal screen logic
+    const screen = document.getElementById('screen');
+    function appendLine(html, cls){
+      const div = document.createElement('div');
+      div.className = 'line' + (cls ? ' '+cls : '');
+      div.innerHTML = html;
+      screen.appendChild(div);
+      screen.scrollTop = screen.scrollHeight;
+      return div;
+    }
+
+    // Typing effect
+    async function typeToScreen(text, delay=18){
+      const container = appendLine('<span class="prompt">'+config.prompt+'</span><span class="typed"></span><span class="caret" aria-hidden="true"></span>');
+      const span = container.querySelector('.typed');
+      const caret = container.querySelector('.caret');
+      for(let i=0;i<text.length;i++){
+        span.textContent += text[i];
+        screen.scrollTop = screen.scrollHeight;
+        await new Promise(r => setTimeout(r, delay));
+      }
+      caret.remove();
+    }
+
+    // Fake command runner
+    async function runCommand(cmd){
+      cmd = cmd.trim();
+      if(!cmd) return;
+      appendLine('<span class="prompt">'+config.prompt+'</span><span class="muted">'+escapeHtml(cmd)+'</span>');
+      switch(cmd){
+        case 'help':
+          appendLine('<span class="muted">Available: help, scan, trace, clear, echo, whoami</span>');
+          break;
+        case 'clear':
+          screen.innerHTML='';
+          break;
+        case 'whoami':
+          appendLine('<span>root</span>');
+          break;
+        case 'scan':
+          await runFakeScan();
+          break;
+        case 'trace':
+          await runFakeTrace();
+          break;
+        default:
+          if(cmd.startsWith('echo ')){
+            appendLine('<span>'+escapeHtml(cmd.slice(5))+'</span>');
+          } else {
+            appendLine('<span class="muted">Command not found: '+escapeHtml(cmd)+'</span>');
+          }
+      }
+    }
+
+    function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+    async function runFakeScan(){
+      appendLine('<span class="muted">Starting network scan...</span>');
+      for(let i=0;i<6;i++){
+        await new Promise(r => setTimeout(r, 450));
+        appendLine('<span class="muted">Found host 10.0.0.'+ (20+i) +' — open: 22,80</span>');
+      }
+      appendLine('<span class="muted">Scan complete. 6 hosts found.</span>');
+    }
+    async function runFakeTrace(){
+      appendLine('<span class="muted">Tracing route to target...</span>');
+      const hops = ['10.0.0.1','203.0.113.5','198.51.100.2','93.184.216.34'];
+      for(const h of hops){
+        await new Promise(r => setTimeout(r, 600));
+        appendLine('<span class="muted">* '+h+'  '+(Math.floor(Math.random()*100)+10)+' ms</span>');
+      }
+      appendLine('<span class="muted">Trace complete.</span>');
+    }
+
+    // Demo starter
+    document.getElementById('runDemo').addEventListener('click', async ()=>{
+      await typeToScreen(config.welcomeText, 20);
+      await new Promise(r=>setTimeout(r,300));
+      await runCommand('help');
+    });
+
+    // Toggle matrix
+    document.getElementById('toggleMatrix').addEventListener('click', ()=>{
+      config.showMatrix = !config.showMatrix;
+      document.getElementById('toggleMatrix').setAttribute('aria-pressed', config.showMatrix);
+      if(!config.showMatrix){ctx.clearRect(0,0,canvas.width,canvas.height)}
+    });
+
+    // Keyboard support: type commands in an invisible input simulation
+    let inputBuffer = '';
+    screen.addEventListener('keydown', async (ev)=>{
+      ev.preventDefault();
+      if(ev.key === 'Enter'){
+        const cmd = inputBuffer.trim();
+        await runCommand(cmd);
+        inputBuffer = '';
+      } else if(ev.key === 'Backspace'){
+        inputBuffer = inputBuffer.slice(0,-1);
+      } else if(ev.key.length === 1){
+        inputBuffer += ev.key;
+      }
+      updatePromptBuffer();
+    });
+    // make screen focusable and show initial prompt
+    screen.tabIndex = 0;
+    function updatePromptBuffer(){
+      // remove last prompt if exists
+      const last = screen.querySelector('.line.prompt-buffer');
+      if(last) last.remove();
+      const div = document.createElement('div');
+      div.className = 'line prompt-buffer';
+      div.innerHTML = '<span class="prompt">'+config.prompt+'</span>' + escapeHtml(inputBuffer) + '<span class="caret" aria-hidden="true"></span>';
+      screen.appendChild(div);
+      screen.scrollTop = screen.scrollHeight;
+    }
+    updatePromptBuffer();
+
+    // Focus screen on click
+    screen.addEventListener('click', ()=>screen.focus());
+
+    // helper: seed some startup lines
+    (async function startup(){
+      appendLine('<span class="muted">[*] Loading modules...</span>');
+      await new Promise(r=>setTimeout(r,400));
+      appendLine('<span class="muted">[*] Modules loaded.</span>');
+      await new Promise(r=>setTimeout(r,300));
+      appendLine('<span class="muted">Type <span class="prompt">help</span> to get started.</span>');
+    })();
+
+    // ensure canvas resizes properly after fonts settle
+    setTimeout(resizeCanvas,200);
+  </script>
+</body>
+</html>
